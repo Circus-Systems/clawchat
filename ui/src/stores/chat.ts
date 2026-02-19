@@ -96,10 +96,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { request } = useConnectionStore.getState();
-      await request('chat.send', {
-        session: sessionKey,
+      const idempotencyKey = `clawchat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      console.log('[chat] Sending:', { sessionKey, message, idempotencyKey });
+      const sendResult = await request('chat.send', {
+        sessionKey,
         message,
+        deliver: false,
+        idempotencyKey,
       });
+      console.log('[chat] Send result:', sendResult);
 
       // Update status to sent
       set(state => ({
@@ -200,49 +205,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
-// Wire up Gateway events to chat store
-onGatewayEvent('chat.message', (payload) => {
-  const chunk = payload.text || payload.chunk || payload.content;
-  if (typeof chunk === 'string') {
-    useChatStore.getState().appendStreamChunk(chunk);
+// Extract text from message content (handles both string and content array formats)
+function extractText(message: unknown): string | null {
+  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) {
+    return message
+      .filter((p: Record<string, unknown>) => p.type === 'text')
+      .map((p: Record<string, unknown>) => p.text)
+      .join('');
   }
-});
+  if (message && typeof message === 'object' && 'content' in (message as Record<string, unknown>)) {
+    return extractText((message as Record<string, unknown>).content);
+  }
+  return null;
+}
 
-onGatewayEvent('chat.tool_call', (payload) => {
-  useChatStore.getState().addToolCall({
-    id: (payload.id || payload.callId || `tool-${Date.now()}`) as string,
-    name: (payload.name || payload.tool || 'unknown') as string,
-    args: payload.args ? JSON.stringify(payload.args) : undefined,
-    status: (payload.status as 'running' | 'completed' | 'failed') || 'running',
-    result: payload.result ? String(payload.result) : undefined,
-    duration: payload.duration as number | undefined,
-  });
-});
+// Expose store for debugging
+(window as any).__chatStore = useChatStore;
 
-onGatewayEvent('chat.done', () => {
-  useChatStore.getState().finalizeStream();
-});
-
-onGatewayEvent('chat.error', (payload) => {
+// Wire up Gateway events — the Gateway sends a single "chat" event with state field
+onGatewayEvent('chat', (payload) => {
+  console.log('[chat-event]', payload.state, 'streaming:', !!useChatStore.getState().streamingMessage);
   const store = useChatStore.getState();
-  if (store.streamingMessage) {
+  const state = payload.state as string;
+
+  if (state === 'delta') {
+    // Streaming delta — extract text from message
+    const text = extractText(payload.message);
+    if (text !== null) {
+      // The delta sends the full accumulated text, not a diff
+      const currentStream = store.streamingMessage;
+      if (currentStream) {
+        const newText = text;
+        if (newText.length > currentStream.text.length) {
+          // Replace with full text (Gateway sends cumulative deltas)
+          useChatStore.setState({
+            streamingMessage: { ...currentStream, text: newText },
+          });
+        }
+      }
+    }
+  } else if (state === 'final') {
     store.finalizeStream();
-  }
-  // Add error message
-  const sessionKey = (payload.session as string) || '';
-  if (sessionKey) {
-    const errorMsg: ChatMessage = {
-      id: `err-${Date.now()}`,
-      role: 'system',
-      content: `Error: ${payload.message || payload.error || 'Unknown error'}`,
-      timestamp: new Date().toISOString(),
-      error: String(payload.message || payload.error),
-    };
-    useChatStore.setState(state => ({
-      messages: {
-        ...state.messages,
-        [sessionKey]: [...(state.messages[sessionKey] || []), errorMsg],
-      },
-    }));
+    // Also reload history to get the complete message
+    const sessionKey = (payload.sessionKey as string) || '';
+    if (sessionKey && store.streamingMessage?.agentId) {
+      store.loadHistory(store.streamingMessage.agentId, sessionKey);
+    }
+  } else if (state === 'aborted') {
+    store.finalizeStream();
+  } else if (state === 'error') {
+    store.finalizeStream();
+    const sessionKey = (payload.sessionKey as string) || '';
+    if (sessionKey) {
+      const errorMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'system',
+        content: `Error: ${payload.errorMessage || 'Unknown error'}`,
+        timestamp: new Date().toISOString(),
+        error: String(payload.errorMessage || 'chat error'),
+      };
+      useChatStore.setState(state => ({
+        messages: {
+          ...state.messages,
+          [sessionKey]: [...(state.messages[sessionKey] || []), errorMsg],
+        },
+      }));
+    }
   }
 });

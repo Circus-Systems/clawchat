@@ -105,6 +105,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
         if (frame.type === 'event') {
           const evt = frame as GatewayEvent;
+          console.log('[ws-event]', evt.event, eventListeners.has(evt.event) ? 'HAS_HANDLER' : 'NO_HANDLER');
           const handlers = eventListeners.get(evt.event);
           if (handlers) {
             for (const h of handlers) h(evt.payload);

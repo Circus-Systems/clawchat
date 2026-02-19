@@ -81,18 +81,37 @@ async function main() {
         }));
       }
 
-      // Forward Gateway events to this client
+      // Forward Gateway events to this client, translating protocol
       const unsubscribe = onGatewayEvent((frame) => {
-        if (socket.readyState === 1) { // OPEN
-          socket.send(JSON.stringify(frame));
+        if (socket.readyState !== 1) return; // not OPEN
+        try {
+          // Translate Gateway → Browser format
+          if (frame.type === 'res') {
+            const translated = {
+              type: 'response',
+              id: frame.id,
+              result: frame.ok ? (frame as any).payload : undefined,
+              error: frame.ok ? undefined : (frame as any).error,
+            };
+            console.log('[ws] Gateway → Client res:', frame.id, frame.ok ? 'ok' : 'error', JSON.stringify(translated.error || translated.result).substring(0, 200));
+            socket.send(JSON.stringify(translated));
+          } else if (frame.type === 'event') {
+            console.log('[ws] Gateway → Client event:', (frame as any).event);
+            socket.send(JSON.stringify(frame)); // events pass through
+          }
+          // Don't forward 'req' frames from Gateway to browser
+        } catch (err) {
+          console.error('[ws] Failed to forward to client:', err);
         }
       });
 
-      // Forward client messages to Gateway
+      // Forward client messages to Gateway, translating protocol
       socket.on('message', (data) => {
         try {
           const msg = data.toString();
           const parsed = JSON.parse(msg);
+          console.log('[ws] Client →', parsed.type, parsed.method || parsed.id);
+
           // Don't forward connect requests (proxy handles auth)
           if (parsed.method === 'connect') {
             socket.send(JSON.stringify({
@@ -102,8 +121,14 @@ async function main() {
             }));
             return;
           }
-          sendRawToGateway(msg);
-        } catch {}
+
+          // Translate Browser → Gateway format: "request" → "req"
+          const gwFrame: Record<string, unknown> = { ...parsed };
+          if (gwFrame.type === 'request') gwFrame.type = 'req';
+          sendRawToGateway(JSON.stringify(gwFrame));
+        } catch (err) {
+          console.error('[ws] Failed to forward client message:', err);
+        }
       });
 
       socket.on('close', () => {
