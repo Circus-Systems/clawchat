@@ -1,6 +1,8 @@
 import { useConnectionStore } from '../../stores/connection';
-import { useErrorsStore } from '../../stores/errors';
+import { useErrorsStore, type AgentError } from '../../stores/errors';
 import type { Agent } from '../../stores/agents';
+
+const EMPTY_ERRORS: AgentError[] = [];
 
 interface Props {
   agentId: string;
@@ -10,7 +12,7 @@ interface Props {
 export default function StatusSection({ agentId, agent }: Props) {
   const { status: connStatus, gatewayInfo } = useConnectionStore();
   const { agentErrors, toggleLogs } = useErrorsStore();
-  const errors = agentErrors[agentId] || [];
+  const errors = agentErrors[agentId] ?? EMPTY_ERRORS;
   const model = agent.model ? String(agent.model).split('/').pop() : 'default';
 
   return (

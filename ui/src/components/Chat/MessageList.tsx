@@ -1,14 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useChatStore } from '../../stores/chat';
 import MessageBubble from './MessageBubble';
 import StreamingMessage from './StreamingMessage';
+
+const EMPTY_MESSAGES: never[] = [];
 
 interface Props {
   sessionKey: string;
 }
 
 export default function MessageList({ sessionKey }: Props) {
-  const messages = useChatStore(state => state.messages[sessionKey] || []);
+  const messages = useChatStore(state => state.messages[sessionKey] ?? EMPTY_MESSAGES);
   const streamingMessage = useChatStore(state => state.streamingMessage);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

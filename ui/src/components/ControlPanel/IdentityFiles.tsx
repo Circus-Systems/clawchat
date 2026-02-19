@@ -1,4 +1,6 @@
-import { useConfigStore } from '../../stores/config';
+import { useConfigStore, type FileState } from '../../stores/config';
+
+const EMPTY_FILES: FileState[] = [];
 
 interface Props {
   agentId: string;
@@ -18,7 +20,7 @@ const FILE_ICONS: Record<string, string> = {
 
 export default function IdentityFiles({ agentId }: Props) {
   const { agentFiles, openFileEditor } = useConfigStore();
-  const files = agentFiles[agentId] || [];
+  const files = agentFiles[agentId] ?? EMPTY_FILES;
 
   return (
     <div className="p-4">
