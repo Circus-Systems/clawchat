@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  --bg-main: #1a1a2e;
+  --bg-panel: #16213e;
+  --bg-bubble-user: #0f3460;
+  --bg-bubble-agent: #1e1e3a;
+  --accent: #e94560;
+  --success: #00d97e;
+  --warning: #f6c23e;
+  --error: #e74a3b;
+  --text-primary: #e0e0e0;
+  --text-muted: #6c757d;
+  --border-subtle: #2a2a4a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  overflow: hidden;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Highlight.js dark theme overrides */
+.hljs {
+  background: #0d1117 !important;
+  border-radius: 0.5rem;
+  padding: 1rem !important;
+}
