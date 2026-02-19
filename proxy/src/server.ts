@@ -150,12 +150,19 @@ async function main() {
       wildcard: false,
     });
 
-    // SPA fallback — serve index.html for non-API, non-WS routes
+    // SPA fallback — serve index.html for navigation routes only.
+    // Static assets (files with extensions) must 404 properly so the browser
+    // doesn't receive text/html when it expects application/javascript etc.
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/') || req.url.startsWith('/ws')) {
         reply.code(404).send({ error: 'Not found' });
       } else {
-        reply.sendFile('index.html');
+        const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
+        if (/\.\w+$/.test(pathname)) {
+          reply.code(404).send({ error: 'Not found' });
+        } else {
+          reply.sendFile('index.html');
+        }
       }
     });
   } else {
