@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useConnectionStore } from '../../stores/connection';
 import { useErrorsStore, type AgentError } from '../../stores/errors';
+import { apiFetch } from '../../lib/auth';
 import type { Agent } from '../../stores/agents';
 
 const EMPTY_ERRORS: AgentError[] = [];
@@ -32,23 +33,51 @@ export default function StatusSection({ agentId, agent }: Props) {
   const [nameError, setNameError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch identity on mount / agent change
+  // Fetch identity on mount / agent change.
+  // If Gateway returns the default "Assistant", try to recover the real name
+  // from IDENTITY.md (which is scaffolded with the user-entered name at creation).
   useEffect(() => {
     setDisplayName(null);
     setIsEditing(false);
     setNameError(null);
 
     let cancelled = false;
-    request('agent.identity.get', { agentId })
-      .then((res) => {
+
+    async function loadName() {
+      try {
+        const res = await request('agent.identity.get', { agentId });
         if (cancelled) return;
         const r = res as Record<string, unknown>;
-        setDisplayName(typeof r.name === 'string' ? r.name : agentId);
-      })
-      .catch(() => {
-        if (!cancelled) setDisplayName(agentId); // fallback to id
-      });
+        const gatewayName = typeof r.name === 'string' ? r.name : '';
 
+        if (gatewayName && gatewayName !== 'Assistant') {
+          setDisplayName(gatewayName);
+          return;
+        }
+
+        // Fallback: extract name from IDENTITY.md scaffold
+        // Scaffolded content: "You are <Name>, a personal AI assistant."
+        try {
+          const fileRes = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/files/IDENTITY.md`);
+          if (!fileRes.ok) throw new Error('no file');
+          const { content } = await fileRes.json() as { content: string };
+          const match = /^You are ([^,\n]+),/.exec(content) || /^#\s+(.+)$/m.exec(content);
+          const extracted = match?.[1]?.trim();
+          if (extracted && extracted !== 'Assistant' && extracted !== agentId && cancelled === false) {
+            // Save it back to Gateway so future loads are fast
+            request('agents.update', { agentId, name: extracted }).catch(() => {});
+            setDisplayName(extracted);
+            return;
+          }
+        } catch {}
+
+        if (!cancelled) setDisplayName(gatewayName || agentId);
+      } catch {
+        if (!cancelled) setDisplayName(agentId);
+      }
+    }
+
+    loadName();
     return () => { cancelled = true; };
   }, [agentId]);
 

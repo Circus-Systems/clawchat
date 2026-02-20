@@ -157,6 +157,17 @@ export default async function agentRoutes(app: FastifyInstance) {
       // Agent files created, config patch failed — log but don't fail
     }
 
+    // Set display name via Gateway (agent.identity.get defaults to "Assistant" without this)
+    const displayName = name?.trim();
+    if (displayName) {
+      try {
+        await gatewayRpc('agents.update', { agentId: id, name: displayName });
+      } catch (err) {
+        console.error('Failed to set agent display name:', err);
+        // Non-fatal — agent created, name just won't be set
+      }
+    }
+
     return { id, workspace: workspaceDir, created: true };
   });
 
