@@ -28,23 +28,19 @@ function TokenBar({ used, limit, fresh }: TokenInfo) {
     pct >= 90 ? 'bg-[#e74a3b]' :
     pct >= 70 ? 'bg-[#f6c23e]' :
     'bg-[#00d97e]';
-  const textColour =
-    pct >= 90 ? 'text-[#e74a3b]' :
-    pct >= 70 ? 'text-[#f6c23e]' :
-    'text-[#00d97e]';
   const muted = !fresh;
 
   return (
-    <div className="mt-1 space-y-1">
-      <div className={`flex justify-between text-[10px] ${muted ? 'text-[#6c757d]' : textColour}`}>
-        <span>{muted ? '~' : ''}{fmt(used)} / {fmt(limit)}</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="w-full h-1.5 bg-[#2a2a4a] rounded-full overflow-hidden">
+    <div className="w-full space-y-0.5" title={`${fmt(used)} / ${fmt(limit)} tokens used (${pct}%)`}>
+      <div className={`w-full h-1.5 bg-[#2a2a4a] rounded-full overflow-hidden ${muted ? 'opacity-40' : ''}`}>
         <div
-          className={`h-full rounded-full transition-all duration-500 ${colour} ${muted ? 'opacity-40' : ''}`}
+          className={`h-full rounded-full transition-all duration-500 ${colour}`}
           style={{ width: `${pct}%` }}
         />
+      </div>
+      <div className={`flex justify-between text-[9px] ${muted ? 'text-[#6c757d]' : 'text-[#e0e0e0]/60'}`}>
+        <span>{muted ? '~' : ''}{fmt(used)}</span>
+        <span>{pct}%</span>
       </div>
     </div>
   );
@@ -156,7 +152,7 @@ export default function StatusSection({ agentId, agent }: Props) {
           }
         } catch {}
 
-        if (!cancelled) setDisplayName(gatewayName || agentId);
+        if (!cancelled) setDisplayName(gatewayName !== 'Assistant' ? gatewayName : agentId);
       } catch {
         if (!cancelled) setDisplayName(agentId);
       }
@@ -294,24 +290,24 @@ export default function StatusSection({ agentId, agent }: Props) {
         </div>
 
         {/* Tokens row */}
-        <div className="flex flex-col gap-0.5">
-          <div className="flex justify-between items-center">
-            <span className="text-[#6c757d]">Tokens</span>
+        <div className="flex justify-between items-center">
+          <span className="text-[#6c757d]">Tokens</span>
+          <div className="flex flex-col items-end w-[60%]">
             {tokenLoading && !tokenInfo && (
               <span className="text-xs text-[#6c757d] italic">Loading…</span>
             )}
             {!tokenLoading && !tokenInfo && (
               <span className="text-xs text-[#6c757d]">—</span>
             )}
+            {tokenInfo && tokenInfo.limit > 0 && (
+              <TokenBar {...tokenInfo} />
+            )}
+            {tokenInfo && tokenInfo.limit === 0 && (
+              <span className="text-xs text-[#6c757d]">
+                {tokenInfo.fresh ? '' : '~'}{fmt(tokenInfo.used)}
+              </span>
+            )}
           </div>
-          {tokenInfo && tokenInfo.limit > 0 && (
-            <TokenBar {...tokenInfo} />
-          )}
-          {tokenInfo && tokenInfo.limit === 0 && (
-            <span className="text-xs text-[#6c757d]">
-              {tokenInfo.fresh ? '' : '~'}{fmt(tokenInfo.used)} tokens
-            </span>
-          )}
         </div>
       </div>
 
