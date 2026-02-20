@@ -13,7 +13,11 @@ export default function StatusSection({ agentId, agent }: Props) {
   const { status: connStatus, gatewayInfo } = useConnectionStore();
   const { agentErrors, toggleLogs } = useErrorsStore();
   const errors = agentErrors[agentId] ?? EMPTY_ERRORS;
-  const model = agent.model ? String(agent.model).split('/').pop() : 'default';
+  const rawModel = agent.model && typeof agent.model === 'object' && 'primary' in agent.model
+    ? (agent.model as { primary: string }).primary
+    : agent.model;
+  const modelStr = String(rawModel || 'default');
+  const model = modelStr.split('/').pop() || 'default';
 
   return (
     <div className="p-4">
