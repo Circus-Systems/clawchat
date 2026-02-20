@@ -1,7 +1,9 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../../stores/chat';
+import { useAgentsStore } from '../../stores/agents';
 import MessageBubble from './MessageBubble';
 import StreamingMessage from './StreamingMessage';
+import ForwardDialog from './ForwardDialog';
 
 const EMPTY_MESSAGES: never[] = [];
 
@@ -12,6 +14,8 @@ interface Props {
 export default function MessageList({ sessionKey }: Props) {
   const messages = useChatStore(state => state.messages[sessionKey] ?? EMPTY_MESSAGES);
   const streamingMessage = useChatStore(state => state.streamingMessage);
+  const { activeAgentId } = useAgentsStore();
+  const [forwardContent, setForwardContent] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -62,7 +66,7 @@ export default function MessageList({ sessionKey }: Props) {
                 </span>
               </div>
             )}
-            <MessageBubble message={msg} />
+            <MessageBubble message={msg} onForward={setForwardContent} />
           </div>
         );
       })}
@@ -72,6 +76,14 @@ export default function MessageList({ sessionKey }: Props) {
       )}
 
       <div ref={bottomRef} />
+
+      {forwardContent && (
+        <ForwardDialog
+          content={forwardContent}
+          onClose={() => setForwardContent(null)}
+          currentAgentId={activeAgentId || undefined}
+        />
+      )}
     </div>
   );
 }
