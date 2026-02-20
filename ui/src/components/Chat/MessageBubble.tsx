@@ -7,9 +7,10 @@ import ToolCallCard from './ToolCallCard';
 
 interface Props {
   message: ChatMessage;
+  onForward?: (content: string) => void;
 }
 
-function MessageBubble({ message }: Props) {
+function MessageBubble({ message, onForward }: Props) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = !!message.error;
@@ -62,6 +63,19 @@ function MessageBubble({ message }: Props) {
             <span className={`text-xs ${message.status === 'read' ? 'text-[#00d97e]' : 'text-[#6c757d]'}`}>
               {statusIcon}
             </span>
+          )}
+          
+          {onForward && (
+            <button
+              onClick={() => onForward(message.content)}
+              className="ml-auto opacity-0 group-hover:opacity-100 text-[#6c757d] hover:text-[#e0e0e0] transition-opacity"
+              title="Forward message"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
           )}
         </div>
 
