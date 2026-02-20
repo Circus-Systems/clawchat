@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fs from 'fs/promises';
 import path from 'path';
+import { exec } from 'child_process';
 import { getOpenClawHome, resolveAgentPath, resolveHomePath } from '../openclaw-home.js';
 import { gatewayRpc } from '../gateway-ws.js';
 
@@ -165,8 +166,34 @@ export default async function agentRoutes(app: FastifyInstance) {
     if (id === 'main' || id === 'anchor') {
       return reply.code(403).send({ error: 'Cannot delete built-in agents' });
     }
-    // Just remove from config, don't delete files
-    // User can manually clean up
-    return { deleted: true, note: 'Removed from config. Files remain on disk.' };
+
+    // Check if agent is registered in openclaw.json
+    const config = await readConfig();
+    const agentList = ((config.agents as Record<string, unknown>)?.list as Array<Record<string, unknown>>) || [];
+    const isRegistered = agentList.some(a => a.id === id);
+
+    if (isRegistered) {
+      // Use CLI for registered agents (handles config + workspace cleanup)
+      return new Promise((resolve) => {
+        const openclaw = process.env.OPENCLAW_BIN || '/opt/homebrew/bin/openclaw';
+        exec(`"${openclaw}" agents delete "${id}" --force`, (error, stdout, stderr) => {
+          if (error) {
+            reply.code(500).send({ error: stderr || error.message });
+            resolve(undefined);
+            return;
+          }
+          resolve({ deleted: true, agentId: id, method: 'cli', output: stdout.trim() });
+        });
+      });
+    } else {
+      // Directory-only agent: remove the agent directory directly
+      const agentRoot = resolveAgentPath(id); // ~/.openclaw/agents/<id>
+      try {
+        await fs.rm(agentRoot, { recursive: true, force: true });
+        return { deleted: true, agentId: id, method: 'fs', note: 'Removed agent directory (was not registered in openclaw.json)' };
+      } catch (err: unknown) {
+        return reply.code(500).send({ error: err instanceof Error ? err.message : 'Failed to remove agent directory' });
+      }
+    }
   });
 }

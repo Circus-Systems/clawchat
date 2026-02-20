@@ -49,7 +49,7 @@ export default function ControlPanel({ onClose }: Props) {
             <StatusSection agentId={activeAgentId} agent={agent} />
             <IdentityFiles agentId={activeAgentId} />
             <SessionManager agentId={activeAgentId} />
-            <DangerZone agentId={activeAgentId} />
+            <DangerZone key={activeAgentId} agentId={activeAgentId} />
           </div>
         )}
       </div>
