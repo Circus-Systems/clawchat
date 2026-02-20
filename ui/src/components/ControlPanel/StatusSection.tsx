@@ -47,6 +47,17 @@ function TokenBar({ used, limit, fresh }: TokenInfo) {
 }
 
 export default function StatusSection({ agentId, agent }: Props) {
+  if (!agent) {
+    return (
+      <div className="p-4">
+        <h3 className="text-xs font-semibold text-[#6c757d] uppercase tracking-wider mb-3">
+          Status
+        </h3>
+        <div className="text-sm text-[#6c757d] italic">Loading agent…</div>
+      </div>
+    );
+  }
+
   const { status: connStatus, request } = useConnectionStore();
   const { agentErrors, toggleLogs } = useErrorsStore();
   const errors = agentErrors[agentId] ?? EMPTY_ERRORS;
