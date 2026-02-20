@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import fs from 'fs/promises';
 import path from 'path';
 import { getOpenClawHome, resolveAgentPath } from '../openclaw-home.js';
+import { isAgentFile, isMemoryNote, AGENT_SCAFFOLD_LIST } from '../agent-scope.js';
 
 // Validate path is within OpenClaw home
 function validatePath(filePath: string): string {
@@ -13,11 +14,46 @@ function validatePath(filePath: string): string {
   return resolved;
 }
 
+/**
+ * Validates a filename (or subpath) from a client request.
+ * Allows: simple filenames (e.g. "SOUL.md") and memory notes (e.g. "memory/2026-02-20.md").
+ * Blocks: path traversal, absolute paths, and any other subdirectory access.
+ */
+function validateClientFilename(filename: string): void {
+  if (filename.includes('..')) throw new Error('Invalid filename: path traversal');
+  if (path.isAbsolute(filename)) throw new Error('Invalid filename: absolute path');
+
+  const parts = filename.split('/');
+  if (parts.length === 1) return; // simple filename — ok
+
+  // Only allow memory/YYYY-MM-DD.md subpath
+  if (parts.length === 2 && isMemoryNote(filename)) return;
+
+  throw new Error('Invalid filename: only memory/YYYY-MM-DD.md subpaths are permitted');
+}
+
+// Resolve workspace path for an agent from config
+async function resolveWorkspace(agentId: string): Promise<string> {
+  const home = getOpenClawHome();
+  try {
+    const configPath = path.join(home, 'openclaw.json');
+    const config = JSON.parse(await fs.readFile(configPath, 'utf-8'));
+    const agents = config.agents?.list || [];
+    const agent = agents.find((a: Record<string, unknown>) => a.id === agentId);
+    return agent?.workspace || config.agents?.defaults?.workspace || path.join(home, 'workspace');
+  } catch {
+    return path.join(home, 'workspace');
+  }
+}
+
 // Resolve file location — check agent dir first, then workspace
 async function resolveFilePath(agentId: string, filename: string): Promise<string> {
-  // Sanitize filename
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-    throw new Error('Invalid filename');
+  validateClientFilename(filename);
+
+  // Memory notes live only in workspace
+  if (isMemoryNote(filename)) {
+    const workspace = await resolveWorkspace(agentId);
+    return validatePath(path.join(workspace, filename));
   }
 
   // Check agent/agent/ dir first
@@ -27,76 +63,72 @@ async function resolveFilePath(agentId: string, filename: string): Promise<strin
     return validatePath(agentFile);
   } catch {}
 
-  // Check workspace
-  // Read config to find workspace
-  const home = getOpenClawHome();
-  const configPath = path.join(home, 'openclaw.json');
-  try {
-    const config = JSON.parse(await fs.readFile(configPath, 'utf-8'));
-    const agents = config.agents?.list || [];
-    const agent = agents.find((a: Record<string, unknown>) => a.id === agentId);
-    const workspace = agent?.workspace || config.agents?.defaults?.workspace || path.join(home, 'workspace');
-    const wsFile = path.join(workspace, filename);
-    return validatePath(wsFile);
-  } catch {
-    // Fallback to default workspace
-    const wsFile = path.join(home, 'workspace', filename);
-    return validatePath(wsFile);
-  }
+  // Fall through to workspace
+  const workspace = await resolveWorkspace(agentId);
+  return validatePath(path.join(workspace, filename));
 }
 
 export default async function fileRoutes(app: FastifyInstance) {
-  // List files for an agent
+  // List agent-scope files for an agent
   app.get<{ Params: { id: string } }>('/api/agents/:id/files', async (req) => {
     const { id } = req.params;
-    const home = getOpenClawHome();
     const agentDir = resolveAgentPath(id, 'agent');
+    const workspace = await resolveWorkspace(id);
+
+    const seen = new Set<string>();
     const files: Array<{ name: string; path: string; modified: string; size: number; location: string }> = [];
 
-    // Agent dir files
+    // Helper: push a file entry if it passes the agent-scope filter
+    async function pushIfAgent(name: string, filePath: string, location: string) {
+      if (!isAgentFile(name)) return;
+      if (seen.has(name)) return;
+      try {
+        const stat = await fs.stat(filePath);
+        seen.add(name);
+        files.push({ name, path: filePath, modified: stat.mtime.toISOString(), size: stat.size, location });
+      } catch {}
+    }
+
+    // 1. Agent dir files (e.g. ~/.openclaw/agents/<id>/agent/)
     try {
       const entries = await fs.readdir(agentDir);
       for (const name of entries) {
-        if (!name.endsWith('.md') && !name.endsWith('.json')) continue;
-        const filePath = path.join(agentDir, name);
-        const stat = await fs.stat(filePath);
-        files.push({
-          name,
-          path: filePath,
-          modified: stat.mtime.toISOString(),
-          size: stat.size,
-          location: 'agent',
-        });
+        await pushIfAgent(name, path.join(agentDir, name), 'agent');
       }
     } catch {}
 
-    // Workspace files
+    // 2. Workspace root files
     try {
-      const configPath = path.join(home, 'openclaw.json');
-      const config = JSON.parse(await fs.readFile(configPath, 'utf-8'));
-      const agents = config.agents?.list || [];
-      const agent = agents.find((a: Record<string, unknown>) => a.id === id);
-      const workspace = agent?.workspace || config.agents?.defaults?.workspace || path.join(home, 'workspace');
-
       const entries = await fs.readdir(workspace);
       for (const name of entries) {
-        if (!name.endsWith('.md')) continue;
-        const filePath = path.join(workspace, name);
-        const stat = await fs.stat(filePath);
-        // Don't duplicate if already found in agent dir
-        if (!files.some(f => f.name === name)) {
-          files.push({
-            name,
-            path: filePath,
-            modified: stat.mtime.toISOString(),
-            size: stat.size,
-            location: 'workspace',
-          });
-        }
+        await pushIfAgent(name, path.join(workspace, name), 'workspace');
       }
     } catch {}
 
-    return { files };
+    // 3. Workspace memory/ subdirectory
+    try {
+      const memDir = path.join(workspace, 'memory');
+      const entries = await fs.readdir(memDir);
+      for (const name of entries) {
+        const qualified = `memory/${name}`;
+        await pushIfAgent(qualified, path.join(memDir, name), 'workspace-memory');
+      }
+    } catch {}
+
+    // Sort: scaffold files first (alphabetically), then memory notes newest-first
+    files.sort((a, b) => {
+      const aIsMem = isMemoryNote(a.name);
+      const bIsMem = isMemoryNote(b.name);
+      if (aIsMem !== bIsMem) return aIsMem ? 1 : -1;
+      if (aIsMem && bIsMem) return b.name.localeCompare(a.name); // newest first
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      files,
+      // Canonical agent-owned file list — frontend uses this to stay in sync
+      agentFiles: AGENT_SCAFFOLD_LIST,
+    };
   });
 
   // Read a file
@@ -138,6 +170,8 @@ export default async function fileRoutes(app: FastifyInstance) {
           } catch {} // File doesn't exist yet, that's fine
         }
 
+        // Ensure parent directory exists (for memory notes)
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, content, 'utf-8');
         const stat = await fs.stat(filePath);
         return { written: true, modified: stat.mtime.toISOString() };
