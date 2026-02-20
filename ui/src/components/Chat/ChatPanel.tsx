@@ -32,7 +32,11 @@ export default function ChatPanel({ onToggleRight }: Props) {
     );
   }
 
-  const model = agent.model ? String(agent.model).split('/').pop() : 'default';
+  const rawModel = agent.model && typeof agent.model === 'object' && 'primary' in agent.model
+    ? (agent.model as { primary: string }).primary
+    : agent.model;
+  const modelStr = String(rawModel || 'default');
+  const model = modelStr.split('/').pop() || 'default';
 
   return (
     <div className="flex flex-col h-full">
