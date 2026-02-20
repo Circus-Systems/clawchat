@@ -7,9 +7,10 @@ import TypingIndicator from './TypingIndicator';
 
 interface Props {
   onToggleRight: () => void;
+  onOpenBacklog: () => void;
 }
 
-export default function ChatPanel({ onToggleRight }: Props) {
+export default function ChatPanel({ onToggleRight, onOpenBacklog }: Props) {
   const { activeAgentId, agents } = useAgentsStore();
   const { loadHistory, isAgentTyping, streamingMessage } = useChatStore();
   const agent = agents.find(a => a.id === activeAgentId);
@@ -50,13 +51,21 @@ export default function ChatPanel({ onToggleRight }: Props) {
             {model} • session:main
           </span>
         </div>
-        <button
-          onClick={onToggleRight}
-          className="text-[#6c757d] hover:text-[#e0e0e0] text-lg"
-          title="Toggle config panel"
-        >
-          ⚙
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onOpenBacklog}
+            className="text-xs font-medium text-[#6c757d] hover:text-[#e0e0e0] border border-[#2a2a4a] rounded px-3 py-1.5 hover:border-[#e94560] hover:bg-[#e94560]/10 transition-all"
+          >
+            Backlog
+          </button>
+          <button
+            onClick={onToggleRight}
+            className="text-[#6c757d] hover:text-[#e0e0e0] text-lg"
+            title="Toggle config panel"
+          >
+            ⚙
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

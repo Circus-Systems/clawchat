@@ -1,16 +1,27 @@
 import { memo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { ChatMessage } from '../../stores/chat';
 import ToolCallCard from './ToolCallCard';
 
 interface Props {
   message: ChatMessage;
   onForward?: (content: string) => void;
+  onAddToBacklog?: (content: string) => void;
 }
 
-function MessageBubble({ message, onForward }: Props) {
+interface CodeProps {
+  node?: any;
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+  [key: string]: any;
+}
+
+function MessageBubble({ message, onForward, onAddToBacklog }: Props) {
+  const [showMenu, setShowMenu] = useState(false);
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = !!message.error;
@@ -54,7 +65,7 @@ function MessageBubble({ message, onForward }: Props) {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 relative">
           <span className="text-xs font-semibold text-[#e0e0e0]">
             {isUser ? '🧑 You' : '🦞 Agent'}
           </span>
@@ -65,23 +76,70 @@ function MessageBubble({ message, onForward }: Props) {
             </span>
           )}
           
-          {onForward && (
-            <button
-              onClick={() => onForward(message.content)}
-              className="ml-auto opacity-0 group-hover:opacity-100 text-[#6c757d] hover:text-[#e0e0e0] transition-opacity"
-              title="Forward message"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </button>
+          {(onForward || onAddToBacklog) && (
+            <div className="ml-auto relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className={`opacity-0 group-hover:opacity-100 text-[#6c757d] hover:text-[#e0e0e0] transition-opacity ${showMenu ? 'opacity-100 text-[#e0e0e0]' : ''}`}
+                title="Options"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-5 w-40 bg-[#16213e] border border-[#2a2a4a] rounded-lg shadow-xl z-50 overflow-hidden py-1">
+                    {onForward && (
+                      <button
+                        onClick={() => { onForward(message.content); setShowMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-xs text-[#e0e0e0] hover:bg-[#1a1a2e] flex items-center gap-2"
+                      >
+                        <span>↪</span> Forward to Agent
+                      </button>
+                    )}
+                    {onAddToBacklog && (
+                      <button
+                        onClick={() => { onAddToBacklog(message.content); setShowMenu(false); }}
+                        className="w-full text-left px-3 py-2 text-xs text-[#e0e0e0] hover:bg-[#1a1a2e] flex items-center gap-2"
+                      >
+                        <span>📋</span> Add to Backlog
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
         {/* Content */}
-        <div className="prose prose-invert prose-sm max-w-none text-[#e0e0e0] [&_pre]:bg-[#0d1117] [&_pre]:rounded-lg [&_code]:text-[#e94560] [&_code]:bg-[#0d1117]/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre_code]:bg-transparent [&_pre_code]:px-0 [&_pre_code]:py-0 [&_a]:text-[#e94560]">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+        <div className="prose prose-invert prose-sm max-w-none text-[#e0e0e0]">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              code({ node, inline, className, children, ...props }: CodeProps) {
+                const match = /language-(\w+)/.exec(className || '');
+                return !inline && match ? (
+                  <SyntaxHighlighter
+                    style={vscDarkPlus}
+                    language={match[1]}
+                    PreTag="div"
+                    {...props}
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              }
+            }}
+          >
             {message.content}
           </ReactMarkdown>
         </div>

@@ -8,9 +8,11 @@ import TokenEntry from './components/shared/TokenEntry';
 import AgentList from './components/AgentSelector/AgentList';
 import ChatPanel from './components/Chat/ChatPanel';
 import ControlPanel from './components/ControlPanel/ControlPanel';
+import BacklogPanel from './components/Backlog/BacklogPanel';
 
 export default function App() {
   const [hasToken, setHasToken] = useState(!!getStoredToken());
+  const [view, setView] = useState<'chat' | 'backlog'>('chat');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const { status, connect } = useConnectionStore();
@@ -52,9 +54,14 @@ export default function App() {
 
         {/* Centre: Chat */}
         <div className="flex-1 min-w-0 flex flex-col">
-          <ChatPanel
-            onToggleRight={() => setRightPanelOpen(!rightPanelOpen)}
-          />
+          {view === 'chat' ? (
+            <ChatPanel
+              onToggleRight={() => setRightPanelOpen(!rightPanelOpen)}
+              onOpenBacklog={() => setView('backlog')}
+            />
+          ) : (
+            <BacklogPanel onBack={() => setView('chat')} />
+          )}
         </div>
 
         {/* Right: Control & Config */}

@@ -4,6 +4,7 @@ import { useAgentsStore } from '../../stores/agents';
 import MessageBubble from './MessageBubble';
 import StreamingMessage from './StreamingMessage';
 import ForwardDialog from './ForwardDialog';
+import AddToBacklogDialog from './AddToBacklogDialog';
 
 const EMPTY_MESSAGES: never[] = [];
 
@@ -16,6 +17,7 @@ export default function MessageList({ sessionKey }: Props) {
   const streamingMessage = useChatStore(state => state.streamingMessage);
   const { activeAgentId } = useAgentsStore();
   const [forwardContent, setForwardContent] = useState<string | null>(null);
+  const [backlogContent, setBacklogContent] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -66,7 +68,11 @@ export default function MessageList({ sessionKey }: Props) {
                 </span>
               </div>
             )}
-            <MessageBubble message={msg} onForward={setForwardContent} />
+            <MessageBubble 
+              message={msg} 
+              onForward={setForwardContent}
+              onAddToBacklog={setBacklogContent}
+            />
           </div>
         );
       })}
@@ -82,6 +88,13 @@ export default function MessageList({ sessionKey }: Props) {
           content={forwardContent}
           onClose={() => setForwardContent(null)}
           currentAgentId={activeAgentId || undefined}
+        />
+      )}
+
+      {backlogContent && (
+        <AddToBacklogDialog
+          content={backlogContent}
+          onClose={() => setBacklogContent(null)}
         />
       )}
     </div>

@@ -1,13 +1,22 @@
 import { memo, useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { StreamState } from '../../stores/chat';
 import { STREAM_FLUSH_INTERVAL } from '../../lib/constants';
 import ToolCallCard from './ToolCallCard';
 
 interface Props {
   stream: StreamState;
+}
+
+interface CodeProps {
+  node?: any;
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+  [key: string]: any;
 }
 
 function StreamingMessage({ stream }: Props) {
@@ -42,8 +51,29 @@ function StreamingMessage({ stream }: Props) {
         </div>
 
         {displayText && (
-          <div className="prose prose-invert prose-sm max-w-none text-[#e0e0e0] [&_pre]:bg-[#0d1117] [&_pre]:rounded-lg [&_code]:text-[#e94560] [&_code]:bg-[#0d1117]/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre_code]:bg-transparent [&_pre_code]:px-0 [&_pre_code]:py-0 [&_a]:text-[#e94560]">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+          <div className="prose prose-invert prose-sm max-w-none text-[#e0e0e0]">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({ node, inline, className, children, ...props }: CodeProps) {
+                  const match = /language-(\w+)/.exec(className || '');
+                  return !inline && match ? (
+                    <SyntaxHighlighter
+                      style={vscDarkPlus}
+                      language={match[1]}
+                      PreTag="div"
+                      {...props}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  );
+                }
+              }}
+            >
               {displayText}
             </ReactMarkdown>
           </div>
