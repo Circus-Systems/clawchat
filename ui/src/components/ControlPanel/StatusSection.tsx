@@ -80,11 +80,13 @@ export default function StatusSection({ agentId, agent }: Props) {
   const fetchTokens = useCallback(async () => {
     try {
       const sessionKey = `agent:${agentId}:main`;
-      const res = await request('sessions.list', { agentId }) as Record<string, unknown>;
-      const sessions = (res?.sessions ?? res) as Array<Record<string, unknown>>;
-      const session = Array.isArray(sessions)
-        ? sessions.find(s => s.key === sessionKey)
-        : undefined;
+      // Fetch all sessions; agentId filter may not work for all gateway versions
+      const res = await request('sessions.list', { agentId, limit: 50 }) as Record<string, unknown>;
+      const raw = res?.sessions ?? res;
+      const sessions = Array.isArray(raw) ? raw as Array<Record<string, unknown>> : [];
+      const session = sessions.find(s => s.key === sessionKey)
+        // Fallback: any session belonging to this agent
+        ?? sessions.find(s => typeof s.key === 'string' && s.key.startsWith(`agent:${agentId}:`));
 
       if (!session) {
         setTokenInfo(null);
@@ -145,7 +147,7 @@ export default function StatusSection({ agentId, agent }: Props) {
           const fileRes = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/files/IDENTITY.md`);
           if (!fileRes.ok) throw new Error('no file');
           const { content } = await fileRes.json() as { content: string };
-          const match = /^You are ([^,\n]{1,64}),/.exec(content);
+          const match = /^You are ([^,\n]{1,64}),/m.exec(content);
           const extracted = match?.[1]?.trim();
           if (extracted && extracted !== 'Assistant' && extracted !== agentId && !cancelled) {
             request('agents.update', { agentId, name: extracted }).catch(() => {});
