@@ -61,7 +61,9 @@ export default function StatusSection({ agentId, agent }: Props) {
           const fileRes = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/files/IDENTITY.md`);
           if (!fileRes.ok) throw new Error('no file');
           const { content } = await fileRes.json() as { content: string };
-          const match = /^You are ([^,\n]+),/.exec(content) || /^#\s+(.+)$/m.exec(content);
+          // Match proxy-scaffolded "You are <Name>, a personal AI..."
+          // Do NOT fall back to headings — they contain filenames, not agent names.
+          const match = /^You are ([^,\n]{1,64}),/.exec(content);
           const extracted = match?.[1]?.trim();
           if (extracted && extracted !== 'Assistant' && extracted !== agentId && cancelled === false) {
             // Save it back to Gateway so future loads are fast
