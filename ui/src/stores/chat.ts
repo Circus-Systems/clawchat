@@ -46,6 +46,21 @@ interface ChatState {
   clearMessages: (sessionKey: string) => void;
 }
 
+// Extract text from message content (handles both string and content array formats)
+function extractText(message: unknown): string | null {
+  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) {
+    return message
+      .filter((p: Record<string, unknown>) => p.type === 'text')
+      .map((p: Record<string, unknown>) => p.text)
+      .join('');
+  }
+  if (message && typeof message === 'object' && 'content' in (message as Record<string, unknown>)) {
+    return extractText((message as Record<string, unknown>).content);
+  }
+  return null;
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
   streamingMessage: null,
@@ -59,13 +74,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!res.ok) return;
       const data = await res.json();
 
-      const messages: ChatMessage[] = (data.messages || []).map((m: Record<string, unknown>, i: number) => ({
-        id: `hist-${i}`,
-        role: m.role || 'assistant',
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-        timestamp: (m.timestamp as string) || new Date().toISOString(),
-        status: 'read',
-      }));
+      const messages: ChatMessage[] = (data.messages || [])
+        .filter((m: Record<string, unknown>) => m.type === 'message')
+        .map((m: Record<string, unknown>, i: number) => {
+          // History entries are nested: { type, id, timestamp, message: { role, content, ... } }
+          const inner = (m.message as Record<string, unknown>) || m;
+          const role = (inner.role as string) || 'assistant';
+          const rawContent = inner.content;
+          const text = extractText(rawContent);
+          return {
+            id: (m.id as string) || `hist-${i}`,
+            role: role as ChatMessage['role'],
+            content: text ?? '',
+            timestamp: (m.timestamp as string) || new Date().toISOString(),
+            status: 'read' as const,
+          };
+        });
 
       set(state => ({
         messages: { ...state.messages, [sessionKey]: messages },
@@ -205,21 +229,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
-// Extract text from message content (handles both string and content array formats)
-function extractText(message: unknown): string | null {
-  if (typeof message === 'string') return message;
-  if (Array.isArray(message)) {
-    return message
-      .filter((p: Record<string, unknown>) => p.type === 'text')
-      .map((p: Record<string, unknown>) => p.text)
-      .join('');
-  }
-  if (message && typeof message === 'object' && 'content' in (message as Record<string, unknown>)) {
-    return extractText((message as Record<string, unknown>).content);
-  }
-  return null;
-}
-
 // Expose store for debugging
 (window as any).__chatStore = useChatStore;
 
@@ -247,11 +256,6 @@ onGatewayEvent('chat', (payload) => {
     }
   } else if (state === 'final') {
     store.finalizeStream();
-    // Also reload history to get the complete message
-    const sessionKey = (payload.sessionKey as string) || '';
-    if (sessionKey && store.streamingMessage?.agentId) {
-      store.loadHistory(store.streamingMessage.agentId, sessionKey);
-    }
   } else if (state === 'aborted') {
     store.finalizeStream();
   } else if (state === 'error') {
