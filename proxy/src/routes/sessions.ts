@@ -91,4 +91,58 @@ export default async function sessionRoutes(app: FastifyInstance) {
       total: messages.length,
     };
   });
+
+  // Get history for selected agent (UI convenience)
+  app.get<{ Querystring: { agentId: string; limit?: string } }>('/api/ui/chat/history', async (req, reply) => {
+    const { agentId } = req.query;
+    if (!agentId) {
+      reply.code(400).send({ error: 'agentId required' });
+      return;
+    }
+    const limit = parseInt(req.query.limit || '100', 10);
+
+    const sessionsDir = resolveAgentPath(agentId, 'sessions');
+    const sessionsJsonPath = path.join(sessionsDir, 'sessions.json');
+    const sessionKey = `agent:${agentId}:main`;
+
+    let sessionId: string | undefined;
+    try {
+      const content = await fs.readFile(sessionsJsonPath, 'utf-8');
+      const sessionsIndex = JSON.parse(content);
+      sessionId = (sessionsIndex as Record<string, any>)[sessionKey]?.sessionId;
+    } catch {}
+
+    if (!sessionId) {
+      return { messages: [], hasMore: false };
+    }
+
+    const jsonlPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+
+    try {
+      await fs.access(jsonlPath);
+    } catch {
+      return { messages: [], hasMore: false };
+    }
+
+    const messages: unknown[] = [];
+    const rl = readline.createInterface({
+      input: createReadStream(jsonlPath),
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        messages.push(JSON.parse(line));
+      } catch {}
+    }
+
+    // Return last N messages
+    const start = Math.max(0, messages.length - limit);
+    return {
+      messages: messages.slice(start),
+      hasMore: start > 0,
+      total: messages.length,
+    };
+  });
 }

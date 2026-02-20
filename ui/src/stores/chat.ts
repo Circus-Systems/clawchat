@@ -69,8 +69,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadHistory: async (agentId: string, sessionKey: string) => {
     try {
-      const encodedKey = encodeURIComponent(sessionKey);
-      const res = await apiFetch(`/api/agents/${agentId}/sessions/${encodedKey}/history?limit=100`);
+      const res = await apiFetch(`/api/ui/chat/history?agentId=${agentId}&limit=100`);
       if (!res.ok) return;
       const data = await res.json();
 
