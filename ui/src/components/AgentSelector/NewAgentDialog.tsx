@@ -6,11 +6,20 @@ interface Props {
   onClose: () => void;
 }
 
+const AVAILABLE_MODELS = [
+  'google/gemini-3-pro-preview',
+  'google/gemini-2.5-pro',
+  'google/gemini-flash-latest',
+  'anthropic/claude-opus-4-6',
+  'anthropic/claude-sonnet-4-6',
+  'anthropic/claude-haiku-4-5',
+];
+
 export default function NewAgentDialog({ onClose }: Props) {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [model, setModel] = useState('anthropic/claude-opus-4-6');
-  const [subagentModel, setSubagentModel] = useState('anthropic/claude-sonnet-4-5');
+  const [subagentModel, setSubagentModel] = useState('anthropic/claude-sonnet-4-6');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const { fetchAgents, setActiveAgent } = useAgentsStore();
@@ -49,11 +58,8 @@ export default function NewAgentDialog({ onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-[#16213e] rounded-xl p-6 w-[28rem] border border-[#2a2a4a] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-[#16213e] rounded-xl p-6 w-[28rem] border border-[#2a2a4a] shadow-2xl">
         <h2 className="text-lg font-bold mb-4">Create New Agent</h2>
 
         <div className="space-y-4">
@@ -80,20 +86,28 @@ export default function NewAgentDialog({ onClose }: Props) {
 
           <div>
             <label className="block text-xs text-[#6c757d] mb-1">Primary Model</label>
-            <input
+            <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
               className="w-full px-3 py-2 bg-[#1a1a2e] border border-[#2a2a4a] rounded-lg text-sm text-[#e0e0e0] font-mono focus:outline-none focus:border-[#e94560]"
-            />
+            >
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="block text-xs text-[#6c757d] mb-1">Sub-Agent Model</label>
-            <input
+            <select
               value={subagentModel}
               onChange={(e) => setSubagentModel(e.target.value)}
               className="w-full px-3 py-2 bg-[#1a1a2e] border border-[#2a2a4a] rounded-lg text-sm text-[#e0e0e0] font-mono focus:outline-none focus:border-[#e94560]"
-            />
+            >
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
           </div>
 
           {error && <p className="text-[#e74a3b] text-sm">{error}</p>}
