@@ -147,20 +147,22 @@ async function main() {
     await app.register(fastifyStatic, {
       root: publicDir,
       prefix: '/',
-      wildcard: false,
+      wildcard: true,   // serve all files in public/; missing ones fall through to notFound
     });
 
-    // SPA fallback — serve index.html for navigation routes only.
-    // Static assets (files with extensions) must 404 properly so the browser
-    // doesn't receive text/html when it expects application/javascript etc.
+    // SPA fallback — serve index.html for client-side navigation routes.
+    // Fastify-static already handled existing asset files above; this only
+    // fires for paths where no file was found.
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/') || req.url.startsWith('/ws')) {
         reply.code(404).send({ error: 'Not found' });
       } else {
         const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
         if (/\.\w+$/.test(pathname)) {
+          // Truly missing asset — return 404 not index.html
           reply.code(404).send({ error: 'Not found' });
         } else {
+          // Navigation route — let the SPA handle it
           reply.sendFile('index.html');
         }
       }
